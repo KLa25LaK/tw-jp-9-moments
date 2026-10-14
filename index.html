@@ -221,7 +221,7 @@ html,body{background:var(--paper)}
   <header class="jmast">
     <div class="jtop"><span class="pill">VOL.01</span><span>茨城縣土浦第一高校 × 基隆中山高中</span></div>
     <h1 class="jtitle"><span class="t">Our <em>9</em><br>Moments</span></h1>
-    <div class="jrow"><div class="kana">9マス大挑戦！</div><div class="jsub">九宮格大挑戰</div><span class="build" id="build">TEST 12</span></div>
+    <div class="jrow"><div class="kana">9マス大挑戦！</div><div class="jsub">九宮格大挑戰</div><span class="build" id="build">TEST 13</span></div>
     <span class="sticker s1" aria-hidden="true"><span>♡ 台日交流 ♡<b>SPECIAL</b></span></span>
     <svg class="postmark" viewBox="0 0 120 120" role="img" aria-label="2026.10.27">
       <defs><path id="pmTop" d="M 24 60 A 36 36 0 0 1 96 60"/><path id="pmBot" d="M 16 60 A 44 44 0 0 0 104 60"/></defs>
@@ -831,6 +831,21 @@ function getAudio(){
 }
 function hex(u8,n){ return Array.from(u8.slice(0,n)).map(b=>b.toString(16).padStart(2,'0')).join(''); }
 // AAC-LC 的標準設定（AudioSpecificConfig）
+// 從裝置給的說明裡找出真正的 AAC 設定：若是整段 ES 描述（0x03 開頭），取出其中 0x05 標籤的內容
+function extractASC(d){
+  if(!d) return null; const u=d instanceof Uint8Array?d:new Uint8Array(d.buffer?d.buffer:d, d.byteOffset||0, d.byteLength);
+  if(u.length>=2&&u.length<=5&&u[0]!==0x03) return u.slice();
+  const readLen=(i)=>{ let len=0,n=0; while(i<u.length&&n<4){ const b=u[i++]; len=(len<<7)|(b&0x7F); n++; if(!(b&0x80)) break; } return [len,i]; };
+  let i=0;
+  while(i<u.length){
+    const tag=u[i++]; const [len,j]=readLen(i); i=j;
+    if(tag===0x03){ i+=2; const fl=u[i++]; if(fl&0x80) i+=2; if(fl&0x40){ i+=1+u[i]; } if(fl&0x20) i+=2; continue; }
+    if(tag===0x04){ i+=13; continue; }
+    if(tag===0x05) return u.slice(i,i+len);
+    i+=len;
+  }
+  return null;
+}
 function aacASC(sr,ch){ const idx=[96000,88200,64000,48000,44100,32000,24000,22050,16000,12000,11025,8000,7350].indexOf(sr); const v=(2<<11)|((idx<0?3:idx)<<7)|(ch<<3); return new Uint8Array([v>>8,v&255]); }
 function peakOf(a){ let m=0; for(let i=0;i<a.length;i+=64){ const v=Math.abs(a[i]); if(v>m) m=v; } return Math.round(m*100)/100; }
 // iPad 規定聲音要在「按下的那一刻」啟動：先播一段無聲的聲音把它打開
@@ -1137,16 +1152,21 @@ async function exportWC(cfg){
       fastStart:'in-memory', firstTimestampBehavior:'offset'});
     let encErr=null;
     venc=new VideoEncoder({output:(c,m)=>muxer.addVideoChunk(c,m),error:e=>encErr=e}); venc.configure(cfg.vc);
-    const asc=aacASC(cfg.ac.sampleRate,2);
+    let asc=aacASC(cfg.ac.sampleRate,2);
     aenc=new AudioEncoder({output:(c,m)=>{
       // 不同裝置給的格式不一樣：一律改成標準的 AAC 原始資料 + 自己產生的設定，iPad 播放器才讀得懂
       let raw=new Uint8Array(c.byteLength); c.copyTo(raw);
-      if(diag.aChunks===0){ diag.head=hex(raw,2); const d=m&&m.decoderConfig&&m.decoderConfig.description; diag.desc=d?(d.byteLength+'b:'+hex(new Uint8Array(d.buffer?d.buffer:d,d.byteOffset||0,Math.min(4,d.byteLength)),4)):'none'; }
+      if(diag.aChunks===0){ diag.head=hex(raw,2); const d=m&&m.decoderConfig&&m.decoderConfig.description; diag.desc=d?(d.byteLength+'b'):'none';
+        const real=extractASC(d); if(real&&real.length>=2){ asc=real; } diag.asc=hex(asc,asc.length); diag.dsr=m&&m.decoderConfig&&m.decoderConfig.sampleRate; }
       if(raw.length>7&&raw[0]===0xFF&&(raw[1]&0xF0)===0xF0){ const hl=(raw[1]&1)?7:9; raw=raw.subarray(hl); diag.adts=true; }
+      if(diag.aChunks===0){ diag.dur0=c.duration; } if(diag.aChunks===1){ diag.ts1=c.timestamp; }
+      // 每段 AAC 固定 1024 個取樣：自己算時間和長度，不依賴裝置給的數值（iPad 可能沒給長度）
+      const fdur=1024/cfg.ac.sampleRate*1e6, fts=Math.round(diag.aChunks*fdur);
       diag.aChunks++; diag.aBytes+=raw.length;
-      const chunk=new EncodedAudioChunk({type:'key',timestamp:c.timestamp,duration:c.duration||undefined,data:raw});
-      const meta={decoderConfig:{codec:cfg.ac.codec||'mp4a.40.2',sampleRate:cfg.ac.sampleRate,numberOfChannels:2,description:asc}};
-      muxer.addAudioChunk(chunk, cfg.muxA&&cfg.muxA!=='aac' ? m : meta);
+      const isAAC=!(cfg.muxA&&cfg.muxA!=='aac');
+      const chunk=new EncodedAudioChunk({type:'key',timestamp:isAAC?fts:c.timestamp,duration:isAAC?Math.round(fdur):(c.duration||undefined),data:raw});
+      const meta={decoderConfig:{codec:cfg.ac.codec||'mp4a.40.2',sampleRate:cfg.ac.sampleRate,numberOfChannels:2,description:asc}};   // asc 只在第一段時決定
+      muxer.addAudioChunk(chunk, isAAC ? meta : m);
     },error:e=>encErr=e}); aenc.configure(cfg.ac);
     const setProg=k=>setPct(k/N*.92);
     const encodeFrame=k=>{
@@ -1279,7 +1299,7 @@ function showResult(){
   const v=$('out'); v.src=resultURL;
   const mb=(resultBlob.size/1048576).toFixed(1);
   $('resInfo').replaceChildren(`完成！${resultName}（${mb} MB・${renderMethod}）`, el('span','ja','完成しました！保存してください。'));
-  const dg=`診斷：${renderMethod}｜AAC編碼 ${diag.aacEnc}｜音訊段數 ${diag.aChunks}｜頭 ${diag.head||'-'}${diag.adts?'(ADTS已去除)':''}｜設定 ${diag.desc||'-'}｜混音 ${diag.mixPeak==null?'×':diag.mixPeak}${diag.mixErr?'('+diag.mixErr+')':''}｜聲音 ${diag.ac}${diag.rec?'｜'+diag.rec.split(';')[0]:''}${diag.ios?'｜iOS '+diag.ios.replace(/_/g,'.'):''}`;
+  const dg=`診斷：${renderMethod}｜AAC編碼 ${diag.aacEnc}｜音訊段數 ${diag.aChunks}｜頭 ${diag.head||'-'}${diag.adts?'(ADTS已去除)':''}｜設定 ${diag.desc||'-'}→${diag.asc||'-'}${diag.dsr?'@'+diag.dsr:''}｜長度 ${diag.dur0==null?'無':diag.dur0}/${diag.ts1==null?'-':diag.ts1}｜混音 ${diag.mixPeak==null?'×':diag.mixPeak}${diag.mixErr?'('+diag.mixErr+')':''}｜聲音 ${diag.ac}${diag.rec?'｜'+diag.rec.split(';')[0]:''}${diag.ios?'｜iOS '+diag.ios.replace(/_/g,'.'):''}`;
   $('resInfo').appendChild(el('span','diag',dg));
   if(mixWarn) setTimeout(()=>toast('背景音樂或音效沒有成功加入這支影片。可以按「換一首音樂重做」再試一次。',6000),400);
   // 平板、手機：用分享選單直接「儲存影片」到相簿
