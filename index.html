@@ -221,7 +221,7 @@ html,body{background:var(--paper)}
   <header class="jmast">
     <div class="jtop"><span class="pill">VOL.01</span><span>茨城縣土浦第一高校 × 基隆中山高中</span></div>
     <h1 class="jtitle"><span class="t">Our <em>9</em><br>Moments</span></h1>
-    <div class="jrow"><div class="kana">9マス大挑戦！</div><div class="jsub">九宮格大挑戰</div><span class="build" id="build">TEST 14</span></div>
+    <div class="jrow"><div class="kana">9マス大挑戦！</div><div class="jsub">九宮格大挑戰</div><span class="build" id="build">TEST 15</span></div>
     <span class="sticker s1" aria-hidden="true"><span>♡ 台日交流 ♡<b>SPECIAL</b></span></span>
     <svg class="postmark" viewBox="0 0 120 120" role="img" aria-label="2026.10.27">
       <defs><path id="pmTop" d="M 24 60 A 36 36 0 0 1 96 60"/><path id="pmBot" d="M 16 60 A 44 44 0 0 0 104 60"/></defs>
@@ -852,6 +852,25 @@ function aacASC(sr,ch){ const idx=[96000,88200,64000,48000,44100,32000,24000,220
 function peakOf(a){ let m=0; for(let i=0;i<a.length;i+=64){ const v=Math.abs(a[i]); if(v>m) m=v; } return Math.round(m*100)/100; }
 // 備用：瀏覽器取不出錄影的聲音時（iPad 常見），自己拆開影片檔、取出聲音軌道再解碼
 async function waitFor(fn,ms){ const t0=performance.now(); while(!fn()){ if(performance.now()-t0>ms) return false; await new Promise(r=>setTimeout(r,100)); } return true; }
+function findBox(b,type,d=0){ if(!b||d>5||typeof b!=='object') return null; if(b[type]) return b[type];
+  for(const k of ['wave','boxes']){ const v=b[k]; if(Array.isArray(v)){ for(const c of v){ if(c&&c.type===type) return c; const r=findBox(c,type,d+1); if(r) return r; } } else if(v){ if(v.type===type) return v; const r=findBox(v,type,d+1); if(r) return r; } }
+  return null; }
+// 直接在檔案裡找 esds，讀出 AAC 設定（tag 0x05）
+function scanESDS(u){
+  const lim=u.length-8;
+  for(let i=4;i<lim;i++){ if(u[i]!==0x65||u[i+1]!==0x73||u[i+2]!==0x64||u[i+3]!==0x73) continue;
+    let p=i+8; const end=Math.min(u.length,i-4+((u[i-4]<<24|u[i-3]<<16|u[i-2]<<8|u[i-1])>>>0)||u.length);
+    const rd=()=>{ const tag=u[p++]; let len=0; for(let k=0;k<4;k++){ const b=u[p++]; len=(len<<7)|(b&0x7f); if(!(b&0x80)) break; } return [tag,len]; };
+    try{
+      let [t,l]=rd(); if(t!==3) continue; p+=2; const fl=u[p++]; if(fl&0x80) p+=2; if(fl&0x40) p+=1+u[p]; if(fl&0x20) p+=2;
+      [t,l]=rd(); if(t!==4) continue; p+=13;
+      [t,l]=rd(); if(t!==5||l<2||l>64||p+l>end+8) continue;
+      const a=u.slice(p,p+l); if((a[0]>>3)>0) return a;
+    }catch(_){}
+  }
+  return null; }
+function makeASC(ot,sr,ch){ const f=[96000,88200,64000,48000,44100,32000,24000,22050,16000,12000,11025,8000,7350]; let fi=f.indexOf(sr); if(fi<0) fi=3;
+  return new Uint8Array([(ot<<3)|(fi>>1), ((fi&1)<<7)|((ch&15)<<3)]); }
 async function demuxAudio(file,maxSec){
   await waitFor(()=>window.MP4Box,8000);
   if(!window.MP4Box) throw new Error('拆檔工具沒載入');
@@ -863,9 +882,20 @@ async function demuxAudio(file,maxSec){
   const entry=mp.getTrackById(tr.id).mdia.minf.stbl.stsd.entries[0];
   const ch=tr.audio.channel_count||2, sr=tr.audio.sample_rate||48000;
   const isOpus=/opus/i.test(tr.codec);
-  const cfg={codec:isOpus?'opus':tr.codec, sampleRate:sr, numberOfChannels:ch};
-  try{ if(entry.esds){ const dsi=entry.esds.esd.descs[0].descs[0]; if(dsi&&dsi.data) cfg.description=new Uint8Array(dsi.data); } }catch(_){}
-  const sup=await AudioDecoder.isConfigSupported(cfg); if(!sup.supported) throw new Error('不支援 '+tr.codec);
+  let cfg;
+  if(isOpus){ cfg={codec:'opus',sampleRate:sr,numberOfChannels:ch}; }
+  else {
+    // iPad/iPhone 的 .mov 把聲音設定藏在額外的包裝裡：先找現成的，找不到就從檔案裡直接搜，再不行就自己算一個
+    let asc=null, how='';
+    try{ const es=findBox(entry,'esds'); const dsi=es&&es.esd.descs[0].descs[0]; if(dsi&&dsi.data){ asc=new Uint8Array(dsi.data); how='box'; } }catch(_){}
+    if(!asc){ asc=scanESDS(new Uint8Array(ab)); if(asc) how='scan'; }
+    if(!asc){ asc=makeASC(2,sr,ch); how='made'; }
+    const ot=(asc[0]>>3)||2;
+    const cands=[{codec:'mp4a.40.'+ot,description:asc},{codec:'mp4a.40.2',description:makeASC(2,sr,ch)},{codec:'mp4a.40.2'}];
+    for(const c of cands){ const t=Object.assign({sampleRate:sr,numberOfChannels:ch},c); try{ if((await AudioDecoder.isConfigSupported(t)).supported){ cfg=t; break; } }catch(_){} }
+    if(!cfg) throw new Error('不支援 '+tr.codec+'/'+how+' '+sr);
+  }
+  if(isOpus){ const sup=await AudioDecoder.isConfigSupported(cfg); if(!sup.supported) throw new Error('不支援 opus'); }
   const samples=await new Promise(res=>{ const all=[]; mp.onSamples=(id,u,list)=>{ all.push(...list); if(all.length>=tr.nb_samples) res(all); };
     mp.setExtractionOptions(tr.id,null,{nbSamples:1000000}); mp.start(); setTimeout(()=>res(all),4000); });
   const outCh=Math.min(2,ch), parts=[[],[]]; let total=0, outSr=sr, decErr=null;
