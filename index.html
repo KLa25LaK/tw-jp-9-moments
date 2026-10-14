@@ -209,6 +209,10 @@ html,body{background:var(--paper)}
 @keyframes lslide{from{transform:translateX(-10%)}to{transform:translateX(132%)}}
 @keyframes lstripe{to{background-position:34px 0}}
 @media (prefers-reduced-motion: reduce){.lbar i{animation:none;width:100%}}
+
+.diag{display:block;margin-top:6px;font-family:var(--f-zh);font-weight:500;font-size:11px;color:var(--muted);word-break:break-all}
+
+.build{align-self:center;font-family:var(--f-pop);font-size:13px;letter-spacing:.08em;color:#8A8597;border:1.5px solid #4A4560;border-radius:6px;padding:2px 8px}
 </style>
 
 </head>
@@ -217,7 +221,7 @@ html,body{background:var(--paper)}
   <header class="jmast">
     <div class="jtop"><span class="pill">VOL.01</span><span>茨城縣土浦第一高校 × 基隆中山高中</span></div>
     <h1 class="jtitle"><span class="t">Our <em>9</em><br>Moments</span></h1>
-    <div class="jrow"><div class="kana">9マス大挑戦！</div><div class="jsub">九宮格大挑戰</div></div>
+    <div class="jrow"><div class="kana">9マス大挑戦！</div><div class="jsub">九宮格大挑戰</div><span class="build" id="build">TEST 10</span></div>
     <span class="sticker s1" aria-hidden="true"><span>♡ 台日交流 ♡<b>SPECIAL</b></span></span>
     <svg class="postmark" viewBox="0 0 120 120" role="img" aria-label="2026.10.27">
       <defs><path id="pmTop" d="M 24 60 A 36 36 0 0 1 96 60"/><path id="pmBot" d="M 16 60 A 44 44 0 0 0 104 60"/></defs>
@@ -824,6 +828,7 @@ function getAudio(){
     try{const o=AC.createOscillator(), g=AC.createGain(); g.gain.value=0.0001; o.frequency.value=30; o.connect(g); g.connect(audioDest); o.start();}catch(_){}}
   return AC;
 }
+function peakOf(a){ let m=0; for(let i=0;i<a.length;i+=64){ const v=Math.abs(a[i]); if(v>m) m=v; } return Math.round(m*100)/100; }
 // iPad 規定聲音要在「按下的那一刻」啟動：先播一段無聲的聲音把它打開
 function unlockAudio(){
   try{
@@ -995,7 +1000,7 @@ async function loadFonts(){
   ]).catch(()=>{}), new Promise(r=>setTimeout(r,3000))]);
 }
 
-let renderMethod='', mixWarn=false, job=null, resultBlob=null, resultName='', resultURL='';
+let renderMethod='', mixWarn=false, diag={}, job=null, resultBlob=null, resultName='', resultURL='';
 $('make').onclick=()=>{
   if(job) return;
   if(!filledCount()){toast('先完成至少一格');return;}
@@ -1005,6 +1010,8 @@ $('make').onclick=()=>{
 async function compose(){
   if(job) return;
   mixWarn=false;
+  diag={ac:AC?AC.state:'none', aacEnc:'?', aChunks:0, aBytes:0, mixPeak:null, rec:'', ios:(navigator.userAgent.match(/OS (\d+[_\d]*) like Mac/)||[])[1]||''};
+  try{ diag.aacEnc = ('AudioEncoder' in window) ? ((await AudioEncoder.isConfigSupported({codec:'mp4a.40.2',sampleRate:48000,numberOfChannels:2,bitrate:128000})).supported?'yes':'no') : 'none'; }catch(_){ diag.aacEnc='err'; }
   try{ getAudio(); AC.resume(); }catch(_){}
   cells.forEach(c=>{ if(c&&c.kind==='video'){ c.video.muted=true; c.snaps=[]; c.snapList=null; }});
   $('make').disabled=true;
@@ -1099,7 +1106,7 @@ function mixAudio(segs,total,sr){
   return [L,R];
 }
 async function exportWC(cfg){
-  const myJob={cancelled:false}; job=myJob;
+  const myJob={cancelled:false}; job=myJob; diag.aChunks=0; diag.aBytes=0;
   $('render').hidden=false; setPct(0);
   let wake=null; try{ wake=await navigator.wakeLock?.request('screen'); }catch(_){}
   const cv=$('cv'), ctx=cv.getContext('2d');
@@ -1108,7 +1115,7 @@ async function exportWC(cfg){
     await loadFonts();
     const {segs,total}=buildTimeline(), N=Math.ceil(total*FPS), sr=cfg.ac.sampleRate;
     let L,R;
-    try{ const mix=await renderMix(segs,total,sr); L=mix.getChannelData(0); R=mix.numberOfChannels>1?mix.getChannelData(1):L; }
+    try{ const mix=await renderMix(segs,total,sr); L=mix.getChannelData(0); R=mix.numberOfChannels>1?mix.getChannelData(1):L; diag.mixPeak=peakOf(L); }
     catch(e){ console.warn('mix failed',e); mixWarn=true; [L,R]=mixAudio(segs,total,sr); }
     if(myJob.cancelled) throw 'cancel';
     const target=new Mp4Muxer.ArrayBufferTarget();
@@ -1118,7 +1125,7 @@ async function exportWC(cfg){
       fastStart:'in-memory', firstTimestampBehavior:'offset'});
     let encErr=null;
     venc=new VideoEncoder({output:(c,m)=>muxer.addVideoChunk(c,m),error:e=>encErr=e}); venc.configure(cfg.vc);
-    aenc=new AudioEncoder({output:(c,m)=>muxer.addAudioChunk(c,m),error:e=>encErr=e}); aenc.configure(cfg.ac);
+    aenc=new AudioEncoder({output:(c,m)=>{ diag.aChunks++; diag.aBytes+=c.byteLength; muxer.addAudioChunk(c,m); },error:e=>encErr=e}); aenc.configure(cfg.ac);
     const setProg=k=>setPct(k/N*.92);
     const encodeFrame=k=>{
       drawFrame(ctx,segs,Math.min(k/FPS,total-.001));
@@ -1159,6 +1166,7 @@ async function exportWC(cfg){
     const flushT=p=>Promise.race([p,new Promise((_,rej)=>setTimeout(()=>rej(new Error('stall')),30000))]);
     await flushT(venc.flush()); await flushT(aenc.flush());
     if(encErr) throw encErr;
+    if(diag.aChunks===0||diag.aBytes<2000) throw new Error('no-audio');   // 音軌是空的：換下一種方式
     muxer.finalize();
     resultBlob=new Blob([target.buffer],{type:'video/mp4'});
     resultName=`九宮格_${stamp()}.mp4`;
@@ -1182,7 +1190,7 @@ async function startRender(){
   const cv=$('cv'), ctx=cv.getContext('2d');
   const {segs,total}=buildTimeline();
   drawFrame(ctx,segs,0);
-  let mix=null; try{ mix=await renderMix(segs,total,getAudio().sampleRate); }catch(e){ console.warn('mix failed',e); mixWarn=true; }
+  let mix=null; try{ mix=await renderMix(segs,total,getAudio().sampleRate); diag.mixPeak=peakOf(mix.getChannelData(0)); }catch(e){ console.warn('mix failed',e); mixWarn=true; diag.mixErr=String(e&&e.name||e); }
   let wake=null; try{ wake=await navigator.wakeLock?.request('screen'); }catch(_){}
   try{ await Promise.race([AC.resume(), new Promise(r=>setTimeout(r,800))]); }catch(_){}
   if(AC.state!=='running'){   // 聲音仍被擋住：請使用者再點一下
@@ -1191,7 +1199,7 @@ async function startRender(){
     try{ await Promise.race([AC.resume(), new Promise(r=>setTimeout(r,800))]); }catch(_){}
   }
   if(AC.state!=='running') mixWarn=true;
-  const mime=pickMime();
+  const mime=pickMime(); diag.ac=AC.state; diag.rec=mime||'default';
   const tracks=[...cv.captureStream(30).getVideoTracks()];
   if(audioDest) tracks.push(...audioDest.stream.getAudioTracks());
   let rec;
@@ -1249,6 +1257,8 @@ function showResult(){
   const v=$('out'); v.src=resultURL;
   const mb=(resultBlob.size/1048576).toFixed(1);
   $('resInfo').replaceChildren(`完成！${resultName}（${mb} MB・${renderMethod}）`, el('span','ja','完成しました！保存してください。'));
+  const dg=`診斷：${renderMethod}｜AAC編碼 ${diag.aacEnc}｜音訊段數 ${diag.aChunks}｜混音 ${diag.mixPeak==null?'×':diag.mixPeak}${diag.mixErr?'('+diag.mixErr+')':''}｜聲音 ${diag.ac}${diag.rec?'｜'+diag.rec.split(';')[0]:''}${diag.ios?'｜iOS '+diag.ios.replace(/_/g,'.'):''}`;
+  $('resInfo').appendChild(el('span','diag',dg));
   if(mixWarn) setTimeout(()=>toast('背景音樂或音效沒有成功加入這支影片。可以按「換一首音樂重做」再試一次。',6000),400);
   // 平板、手機：用分享選單直接「儲存影片」到相簿
   resultFile=null;
