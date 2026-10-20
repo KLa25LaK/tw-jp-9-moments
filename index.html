@@ -233,7 +233,7 @@ html,body{background:var(--paper)}
   <header class="jmast">
     <div class="jtop"><span class="pill">VOL.01</span><span>茨城縣土浦第一高校 × 基隆中山高中</span></div>
     <h1 class="jtitle"><span class="t">Our <em>9</em><br>Moments</span></h1>
-    <div class="jrow"><div class="kana">9マス大挑戦！</div><div class="jsub">九宮格大挑戰</div><span class="build" id="build">TEST 19</span></div>
+    <div class="jrow"><div class="kana">9マス大挑戦！</div><div class="jsub">九宮格大挑戰</div><span class="build" id="build">TEST 20</span></div>
     <span class="sticker s1" aria-hidden="true"><span>♡ 台日交流 ♡<b>SPECIAL</b></span></span>
     <svg class="postmark" viewBox="0 0 120 120" role="img" aria-label="2026.10.27">
       <defs><path id="pmTop" d="M 24 60 A 36 36 0 0 1 96 60"/><path id="pmBot" d="M 16 60 A 44 44 0 0 0 104 60"/></defs>
@@ -361,7 +361,7 @@ const VIDEO_BANK = [
 // 每次打開網頁：隨機抽 5 題照片、4 題錄影（錄影放在第 2、4、6、8 格）
 function pickRandom(arr,n){ const a=arr.slice(); for(let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; } return a.slice(0,n); }
 const QUESTIONS = (()=>{
-  const ph=pickRandom(PHOTO_BANK,5).map(q=>({type:'photo',zh:q.zh,ja:q.ja,steps:q.steps,desc:q.steps.map(s=>s[0]).join(' → '),jdesc:q.steps.map(s=>s[1]).join('')}));
+  const ph=pickRandom(PHOTO_BANK,5).map(q=>({type:'photo',zh:q.zh,ja:q.ja,steps:q.steps,desc:q.steps.map(s=>s[0]).join(' → '),jdesc:q.steps.map(s=>s[1]).join(' → ')}));
   const vd=pickRandom(VIDEO_BANK,4).map(q=>Object.assign({type:'video'},q));
   return [0,1,2,3,4,5,6,7,8].map(i=>i%2?vd.shift():ph.shift());
 })();
@@ -627,7 +627,11 @@ function buildTimeline(){
 }
 
 function rr(ctx,x,y,w,h,r){ctx.beginPath();ctx.moveTo(x+r,y);ctx.arcTo(x+w,y,x+w,y+h,r);ctx.arcTo(x+w,y+h,x,y+h,r);ctx.arcTo(x,y+h,x,y,r);ctx.arcTo(x,y,x+w,y,r);ctx.closePath();}
-function wrap(ctx,text,maxW){const lines=[];let line='';for(const ch of text){const t=line+ch;if(ctx.measureText(t).width>maxW&&line){lines.push(line);line=ch;}else line=t;}if(line)lines.push(line);return lines;}
+// 換行：標點符號（。，、」）！？）不放在行首
+const NO_START='。，、．,.」』）)！？!?ー・：；～…';
+function wrap(ctx,text,maxW){const lines=[];let line='';for(const ch of text){const t=line+ch;
+  if(ctx.measureText(t).width>maxW&&line){ if(NO_START.includes(ch)&&line.length>1){ lines.push(line.slice(0,-1)); line=line.slice(-1)+ch; } else { lines.push(line); line=ch; } }
+  else line=t;}if(line)lines.push(line);return lines;}
 
 function burst(ctx,r,n=12,inner=.8){ ctx.beginPath(); for(let k=0;k<n*2;k++){ const a=k/(n*2)*Math.PI*2-Math.PI/2, rr2=k%2?r*inner:r; ctx.lineTo(Math.cos(a)*rr2,Math.sin(a)*rr2);} ctx.closePath(); }
 function drawStamp(ctx,cx,cy,r,k){
@@ -667,7 +671,10 @@ function drawCell(ctx,i,r,o={}){
     ctx.fillStyle=isV?C.tintVideo:C.tintPhoto; ctx.fillRect(r.x,r.y,r.w,r.h);
     ctx.fillStyle=C.muted; ctx.textAlign='center'; ctx.textBaseline='middle';
     const fs=r.w*.1; ctx.font=`900 ${fs}px ${FZ}`;
-    const ls=wrap(ctx,q.zh,r.w*.8); ls.forEach((l,k)=>ctx.fillText(l,r.x+r.w/2,r.y+r.h/2+(k-(ls.length-1)/2)*fs*1.3));
+    const ls=wrap(ctx,q.zh,r.w*.8), jf=fs*.62; ctx.font=`800 ${jf}px ${FJ}`; const lj=wrap(ctx,q.ja,r.w*.84);
+    const lines=[...ls.map(t=>[t,fs,`900 ${fs}px ${FZ}`,C.muted]),...lj.map(t=>[t,jf,`800 ${jf}px ${FJ}`,'#8E87A3'])];
+    const tot=lines.reduce((a,l)=>a+l[1]*1.3,0)+jf*.3; let yy=r.y+r.h/2-tot/2;
+    lines.forEach((l,k)=>{ if(k===ls.length) yy+=jf*.3; ctx.font=l[2]; ctx.fillStyle=l[3]; ctx.fillText(l[0],r.x+r.w/2,yy+l[1]*.65); yy+=l[1]*1.3; });
   }
   ctx.restore();
   ctx.lineWidth=Math.max(isV?3.5:2.5,r.w*(isV?.02:.014)); ctx.strokeStyle=edge; rr(ctx,r.x,r.y,r.w,r.h,rad); ctx.stroke();
@@ -801,7 +808,12 @@ function drawPanelFocus(ctx,i,a){
   ctx.textBaseline='top'; let y=148;
   ctx.fillStyle=C.ink; ctx.font=`900 56px ${FZ}`; wrap(ctx,q.zh,MW).forEach(l=>{ctx.fillText(l,X,y);y+=70;});
   y+=6; ctx.fillStyle=C.lemon; ctx.font=`800 28px ${FJ}`; wrap(ctx,q.ja,MW).forEach(l=>{ctx.fillText(l,X,y);y+=40;});
-  y+=18; ctx.fillStyle=C.muted; ctx.font=`500 24px ${FZ}`; wrap(ctx,q.desc,MW).slice(0,5).forEach(l=>{ctx.fillText(l,X,y);y+=38;});
+  y+=18;
+  // 中文說明＋日文說明：字太多就自動縮小，放得下為止
+  let ds=24, dz, dj; for(;ds>=15;ds--){ ctx.font=`500 ${ds}px ${FZ}`; dz=wrap(ctx,q.desc,MW); ctx.font=`500 ${ds}px ${FJ}`; dj=q.jdesc?wrap(ctx,q.jdesc,MW):[];
+    if(y+(dz.length+dj.length)*ds*1.5+(dj.length?ds*.6:0)<=628) break; }
+  ctx.fillStyle=C.muted; ctx.font=`500 ${ds}px ${FZ}`; dz.forEach(l=>{ctx.fillText(l,X,y);y+=ds*1.5;});
+  if(dj.length){ y+=ds*.6; ctx.fillStyle='#E9D9F2'; ctx.font=`500 ${ds}px ${FJ}`; dj.forEach(l=>{ if(y<640){ ctx.fillText(l,X,y);} y+=ds*1.5;}); }
   for(let k=0;k<9;k++){ctx.beginPath(); ctx.arc(X+12+k*34,652,k===i?10:7,0,Math.PI*2); ctx.fillStyle=k===i?C.pink:(filled(cells[k])?C.ink:C.dim); ctx.fill();}
   ctx.restore();
 }
