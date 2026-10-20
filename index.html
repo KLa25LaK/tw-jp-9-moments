@@ -233,7 +233,7 @@ html,body{background:var(--paper)}
   <header class="jmast">
     <div class="jtop"><span class="pill">VOL.01</span><span>茨城縣土浦第一高校 × 基隆中山高中</span></div>
     <h1 class="jtitle"><span class="t">Our <em>9</em><br>Moments</span></h1>
-    <div class="jrow"><div class="kana">9マス大挑戦！</div><div class="jsub">九宮格大挑戰</div><span class="build" id="build">TEST 18</span></div>
+    <div class="jrow"><div class="kana">9マス大挑戦！</div><div class="jsub">九宮格大挑戰</div><span class="build" id="build">TEST 19</span></div>
     <span class="sticker s1" aria-hidden="true"><span>♡ 台日交流 ♡<b>SPECIAL</b></span></span>
     <svg class="postmark" viewBox="0 0 120 120" role="img" aria-label="2026.10.27">
       <defs><path id="pmTop" d="M 24 60 A 36 36 0 0 1 96 60"/><path id="pmBot" d="M 16 60 A 44 44 0 0 0 104 60"/></defs>
@@ -1079,8 +1079,13 @@ async function renderMix(segs,total,sr){
 }
 
 /* ---------- 選音樂畫面 ---------- */
-let prevSrc=null, prevK=null;
-function stopPreview(){ if(prevSrc){ try{prevSrc.stop();}catch(_){} } prevSrc=null; prevK=null; renderSongs(); }
+// 試聽用一般的 <audio> 播放：iPhone／iPad 開靜音模式時網頁音效會被擋，<audio> 不會
+let prevK=null; const prevAudio=new Audio(); prevAudio.preload='auto'; prevAudio.setAttribute('playsinline','');
+const songURLs={};
+function songURL(k){ if(songURLs[k]) return songURLs[k]; const f=SONGS[k].file, emb=window.SONG_DATA&&window.SONG_DATA[f];
+  return songURLs[k]= emb ? URL.createObjectURL(new Blob([b64ToBuf(emb)],{type:'audio/mpeg'})) : f; }
+prevAudio.onended=()=>{ prevK=null; renderSongs(); };
+function stopPreview(){ try{ prevAudio.pause(); }catch(_){} prevK=null; renderSongs(); }
 function renderSongs(loadingK){
   const box=$('songs'); box.replaceChildren();
   [...SONGS.map((s,k)=>[k,s.name,s.len]),[-1,'不要音樂 BGMなし','']].forEach(([k,name,len])=>{
@@ -1095,32 +1100,24 @@ function renderSongs(loadingK){
 }
 async function pickSong(k){
   if(k>=0&&prevK===k){ stopPreview(); return; }   // 再點一次：停止試聽
-  if(prevSrc){ try{prevSrc.stop();}catch(_){} prevSrc=null; prevK=null; }
+  try{ prevAudio.pause(); }catch(_){} prevK=null;
   musicChoice=k;
   unlockAudio();
   if(k<0){ renderSongs(); return; }
-  renderSongs(songBufs[k]?null:k);
-  let stage='讀取';
-  try{
-    getAudio();
-    try{ await Promise.race([AC.resume(), new Promise(r=>setTimeout(r,1500))]); }catch(_){}   // 聲音啟動失敗也繼續，先把音樂讀進來
-    const buf=await loadSong(k);
-    if(musicChoice!==k) return;                    // 等待中已改選別首
-    stage='播放';
-    const src=AC.createBufferSource(); src.buffer=buf; src.connect(AC.destination);
-    src.onended=()=>{ if(prevSrc===src){ prevSrc=null; prevK=null; renderSongs(); } };
-    src.start(); prevSrc=src; prevK=k;
-  }catch(e){
-    const why=`（${stage}・${(e&&e.name)||'錯誤'}${e&&e.message?' '+String(e.message).slice(0,40):''}）`;
-    if(stage==='播放') toast('音樂讀到了，但這台裝置沒辦法試聽，合成時仍會加入。'+why,5000);
-    else { toast('這首音樂載入失敗，請換一首。'+why,6000); musicChoice=null; }
-  }
+  // 一定要在按下的當下就開始播（iPhone 規定）
+  try{ prevAudio.src=songURL(k); prevAudio.currentTime=0; const pr=prevAudio.play(); prevK=k;
+    if(pr&&pr.catch) pr.catch(e=>{ if(prevK===k){ prevK=null; renderSongs(); toast('這台裝置沒辦法試聽，合成時仍會加入音樂。（'+((e&&e.name)||'錯誤')+'）',5000); } });
+  }catch(e){ prevK=null; }
   renderSongs();
+  // 同時在背景把音樂準備好，合成時要用
+  try{ await loadSong(k); }
+  catch(e){ if(musicChoice===k){ toast('這首音樂載入失敗，請換一首。（'+((e&&e.name)||'錯誤')+'）',6000); musicChoice=null; stopPreview(); } }
 }
 function openPicker(){ renderSongs(); $('pick').hidden=false; }
 $('pickBack').onclick=()=>{ stopPreview(); $('pick').hidden=true; };
 $('pickGo').onclick=async()=>{
   if(musicChoice==null) return;
+  try{ prevAudio.pause(); }catch(_){} prevK=null;
   unlockAudio();
   const btn=$('pickGo'); btn.disabled=true;
   try{ if(musicChoice>=0) await loadSong(musicChoice); }
