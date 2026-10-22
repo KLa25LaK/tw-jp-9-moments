@@ -166,6 +166,8 @@ html,body{background:var(--paper)}
 .cell{border:3px solid var(--ink);border-radius:16px;box-shadow:4px 4px 0 var(--ink);padding:10px;gap:2px}
 .cell.photo{background:var(--sky-soft)}
 .cell.video{background:#4A1F38;border-color:var(--pink);box-shadow:4px 4px 0 var(--pink)}
+.cell.flower{background:none;border:0;box-shadow:none;cursor:default;padding:0;overflow:visible}
+.cell.flower canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
 .cell:nth-child(odd){transform:rotate(-1.2deg)} .cell:nth-child(even){transform:rotate(1.2deg)}
 .cell:active{transform:scale(.97)}
 .cell .num{width:34px;height:34px;border-radius:50%;background:var(--pink);color:#fff;border:2.5px solid var(--ink);font-family:var(--f-pop);font-weight:400;font-size:16px;top:7px;left:7px}
@@ -327,15 +329,11 @@ const PHOTO_BANK = [
   {zh:'起身三連拍', ja:'立ち上がり3連写', steps:[['蹲下','しゃがむ'],['起身','立ち上がる'],['跳起','ジャンプ！']]},
   {zh:'動物模仿', ja:'動物のまね', steps:[['模仿狗','犬のまね'],['模仿貓','猫のまね'],['模仿兔子','うさぎのまね']]},
   {zh:'愛心變大', ja:'ハートが大きくなる', steps:[['小愛心','小さいハート'],['中愛心','中くらいのハート'],['大愛心','大きいハート']]},
-  {zh:'流行拍照姿勢', ja:'流行りの写真ポーズ', steps:[['第一個流行姿勢','流行りのポーズ①'],['第二個流行姿勢','流行りのポーズ②'],['第三個流行姿勢','流行りのポーズ③']]},
   {zh:'鬼臉三連拍', ja:'変顔3連写', steps:[['第一個鬼臉','変顔①'],['第二個鬼臉','変顔②'],['第三個鬼臉','変顔③']]},
-  {zh:'鼻子兩側', ja:'鼻の横に指', steps:[['雙手食指放鼻子兩側','両手の人差し指を鼻の両側に'],['只放左邊','左だけ'],['只放右邊','右だけ']]},
-  {zh:'托腮三連拍', ja:'ほおづえ3連写', steps:[['雙手托腮','両手でほおづえ'],['左手托腮','左手でほおづえ'],['右手托腮','右手でほおづえ']]},
   {zh:'情緒表情', ja:'気持ちの表情', steps:[['開心','うれしい'],['生氣','怒る'],['難過','悲しい']]},
   {zh:'指向哪裡', ja:'どこを指す？', steps:[['手指左邊','左を指す'],['手指右邊','右を指す'],['雙手指向正前方','両手で正面を指す']]},
   {zh:'可愛三連拍', ja:'かわいい3連写', steps:[['單手遮嘴','片手で口元を隠す'],['歪頭眨眼','首をかしげてウインク'],['賣萌比拳頭','グーでぶりっ子ポーズ']]},
   {zh:'笑臉開花', ja:'笑顔が咲く', steps:[['拳頭擠臉、瞇眼笑','グーでほっぺを押して目を細めて笑う'],['雙手做花朵','両手でお花'],['十指張開','10本の指をパッと開く']]},
-  {zh:'千手合照', ja:'千手観音ポーズ', steps:[['全員前後排成一直線','全員で前後一列に並ぶ'],['後方組員不移動腳步，向左右伸出手臂，各自方向不同','後ろの人は足を動かさず、左右バラバラの方向に腕を伸ばす'],['最前方的人雙手合十','先頭の人が両手を合わせる']]},
   {zh:'俏皮三連拍', ja:'おちゃめ3連写', steps:[['雙手在頭上比兔耳朵','頭の上で両手うさ耳'],['雙手在臉旁做貓掌','顔の横で両手ねこの手'],['雙手托下巴、露出燦爛笑容','両手であごを支えて満面の笑み']]},
   {zh:'手勢變換', ja:'ハンドサインチェンジ', steps:[['單手比槍','片手でピストル'],['雙手比 OK','両手でOK'],['單手遮眼','片手で目を隠す']]},
   {zh:'一起傾斜', ja:'みんなで傾こう', steps:[['並排向右傾','並んで右に傾く'],['向左傾','左に傾く'],['向前傾','前に傾く']]},
@@ -361,9 +359,9 @@ const VIDEO_BANK = [
 // 每次打開網頁：隨機抽 5 題照片、4 題錄影（錄影放在第 2、4、6、8 格）
 function pickRandom(arr,n){ const a=arr.slice(); for(let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; } return a.slice(0,n); }
 const QUESTIONS = (()=>{
-  const ph=pickRandom(PHOTO_BANK,5).map(q=>({type:'photo',zh:q.zh,ja:q.ja,steps:q.steps,desc:q.steps.map(s=>s[0]).join(' → '),jdesc:q.steps.map(s=>s[1]).join(' → ')}));
+  const ph=pickRandom(PHOTO_BANK,4).map(q=>({type:'photo',zh:q.zh,ja:q.ja,steps:q.steps,desc:q.steps.map(s=>s[0]).join(' → '),jdesc:q.steps.map(s=>s[1]).join(' → ')}));
   const vd=pickRandom(VIDEO_BANK,4).map(q=>Object.assign({type:'video'},q));
-  return [0,1,2,3,4,5,6,7,8].map(i=>i%2?vd.shift():ph.shift());
+  return [0,1,2,3,4,5,6,7,8].map(i=>i===4?{type:'flower',zh:'',ja:'',desc:''}:i%2?vd.shift():ph.shift());
 })();
 const VIDEO_MAX = 15;      // 每段錄影最多使用幾秒
 const PHOTO_MAX = 3;      // 每個拍照題最多幾張（連拍）
@@ -382,6 +380,9 @@ const SONGS = [
 
 const $ = id => document.getElementById(id);
 const cells = Array(9).fill(null);
+const FLOWER_I = 4;                                   // 中間那格：旋轉的花，不用拍
+const TOTAL = QUESTIONS.filter(q=>q.type!=='flower').length;   // 需要完成的格數（8）
+const qNo = i => QUESTIONS.slice(0,i).filter(q=>q.type!=='flower').length+1;   // 格子編號（跳過花）
 let current = -1;
 
 // group select
@@ -396,11 +397,12 @@ const filledCount=()=>cells.filter(filled).length;
 function renderBoard(){
   const b=$('board'); b.replaceChildren();
   QUESTIONS.forEach((q,i)=>{
+    if(q.type==='flower'){ const d=el('div','cell flower'); d.setAttribute('aria-hidden','true'); const cv=document.createElement('canvas'); d.appendChild(cv); b.appendChild(d); startBoardFlower(cv); return; }
     const c=cells[i], f=filled(c);
     const btn=el('button','cell '+q.type+(f?' filled':'')); btn.type='button';
-    btn.setAttribute('aria-label',`第 ${i+1} 格：${q.zh}${f?'（已完成）':''}`);
+    btn.setAttribute('aria-label',`第 ${qNo(i)} 格：${q.zh}${f?'（已完成）':''}`);
     if(f&&c.thumbURL){const img=el('img'); img.alt=''; img.src=c.thumbURL; btn.appendChild(img);}
-    btn.appendChild(el('span','num',String(i+1)));
+    btn.appendChild(el('span','num',String(qNo(i))));
     btn.appendChild(el('span','tag', q.type==='photo'?(f?`拍照 ${c.photos.length}/${PHOTO_MAX}`:'拍照 写真'):'錄影 動画'));
     if(f){const s=el('span','stamp','完成'); s.appendChild(el('small',null,'クリア!')); btn.appendChild(s);}
     btn.appendChild(el('span','title',q.zh));
@@ -411,8 +413,8 @@ function renderBoard(){
   const n=filledCount();
   const {total}=buildTimeline();
   const [hz,hj] = n===0 ? ['先完成至少一格，才能合成影片。','1マス以上クリアで、動画が作れます。'] :
-    n<9 ? [`還有 ${9-n} 格未完成，空格會只顯示題目。成品約 ${Math.round(total)} 秒。`,`あと${9-n}マス！空いたマスはお題だけ表示されます。`] :
-    [`九格都完成了！成品約 ${Math.round(total)} 秒。`,'9マス全部クリア！動画を作ろう！'];
+    n<TOTAL ? [`還有 ${TOTAL-n} 格未完成，空格會只顯示題目。成品約 ${Math.round(total)} 秒。`,`あと${TOTAL-n}マス！空いたマスはお題だけ表示されます。`] :
+    [`${TOTAL} 格都完成了！成品約 ${Math.round(total)} 秒。`,'全部クリア！動画を作ろう！'];
   $('hint').replaceChildren(hz, el('span','ja',hj));
   $('make').disabled = n===0;
 }
@@ -420,7 +422,7 @@ function renderBoard(){
 /* ---------- 題目卡 ---------- */
 function openSheet(i){
   current=i; const q=QUESTIONS[i], c=cells[i], f=filled(c);
-  $('qNum').textContent=`${i+1} / 9`;
+  $('qNum').textContent=`${qNo(i)} / ${TOTAL}`;
   const t=$('qType'); t.textContent=q.type==='photo'?'拍照 写真':'錄影 動画'; t.className='t '+q.type;
   $('qTitle').textContent=q.zh; $('qJa').textContent=q.ja;
   const qd=$('qDesc'); qd.replaceChildren();
@@ -564,7 +566,7 @@ async function addPhotos(i,files){
   $('qBusy').hidden=true; $('qShoot').disabled=false;
   renderBoard(); if(current===i) openSheet(i);
   if(bad) fileError(bad.file,'photo',bad.err);
-  else if(added) toast(`第 ${i+1} 格：${c.photos.length} / ${PHOTO_MAX} 張`);
+  else if(added) toast(`第 ${qNo(i)} 格：${c.photos.length} / ${PHOTO_MAX} 張`);
 }
 function removePhoto(i,k){
   const c=cells[i]; if(!c||!c.photos) return;
@@ -586,7 +588,7 @@ async function setCell(i,file,kind){
     const data={kind:'video',url,thumb,thumbURL:safeDataURL(thumb),video:v,duration:dur,audio,aSrc,aErr,snaps:[]};
     if(dur>VIDEO_MAX+.3) setTimeout(()=>toast(`影片有 ${Math.round(dur)} 秒，成品只會用前 ${VIDEO_MAX} 秒`,3600),300);
     releaseCell(i); cells[i]=data; renderBoard(); closeSheet();
-    toast(`第 ${i+1} 格完成！`);
+    toast(`第 ${qNo(i)} 格完成！`);
   }catch(err){
     URL.revokeObjectURL(url);
     $('vbin').querySelectorAll('video').forEach(v=>{ if(!cells.some(c=>c&&c.video===v)) killVideo(v); });
@@ -654,6 +656,7 @@ function drawSrc(ctx,src,sw,sh,r,z=1,px=0,py=0){
 // o: {live, pi:照片編號, z:放大, px/py:平移, snap:結尾影片格, stamp}
 function drawCell(ctx,i,r,o={}){
   const c=cells[i], q=QUESTIONS[i], rad=Math.max(10,r.w*.08), sh=Math.max(3,r.w*.022);
+  if(q.type==='flower'){ drawFlowerCell(ctx,r,FLOWER_T); return; }
   const isV=q.type==='video', edge=isV?C.pink:C.ink;
   ctx.fillStyle=edge; rr(ctx,r.x+sh,r.y+sh,r.w,r.h,rad); ctx.fill();   // 貼紙的錯位陰影
   ctx.save(); rr(ctx,r.x,r.y,r.w,r.h,rad); ctx.clip();
@@ -682,7 +685,7 @@ function drawCell(ctx,i,r,o={}){
   ctx.fillStyle=isV?C.pink:C.sky; ctx.beginPath(); ctx.arc(bx,by,b/2,0,Math.PI*2); ctx.fill();
   ctx.lineWidth=Math.max(2,b*.07); ctx.strokeStyle=C.ink; ctx.stroke();
   ctx.fillStyle='#fff'; ctx.textAlign='center'; ctx.textBaseline='middle'; ctx.font=`400 ${b*.5}px ${FP}`;
-  ctx.fillText(String(i+1),bx,by+1);
+  ctx.fillText(String(qNo(i)),bx,by+1);
   if(q.type==='video'){
     const cx=r.x+r.w-8-b/2, cy=r.y+8+b/2;
     ctx.fillStyle=C.pink; ctx.beginPath(); ctx.arc(cx,cy,b/2,0,Math.PI*2); ctx.fill(); ctx.strokeStyle=C.ink; ctx.stroke();
@@ -696,6 +699,46 @@ function drawCell(ctx,i,r,o={}){
   if(o.stamp) drawStamp(ctx,r.x+r.w*.72,r.y+r.h*.7,r.w*.22,o.stamp);
 }
 // 以中心旋轉後畫一格
+/* ---------- 中間的旋轉小花 ---------- */
+let FLOWER_T=0;
+function drawFlower(ctx,cx,cy,R,t){
+  const rot=t*.55, br=1+.04*Math.sin(t*3.2), N=8;
+  ctx.save(); ctx.translate(cx,cy); ctx.scale(br,br);
+  // 花瓣：粉紅色、黃色描邊
+  for(let k=0;k<N;k++){
+    const a=rot+k/N*Math.PI*2;
+    ctx.save(); ctx.rotate(a); ctx.translate(0,-R*.56);
+    ctx.beginPath(); ctx.ellipse(0,0,R*.32,R*.46,0,0,Math.PI*2);
+    ctx.fillStyle='#FF6FA8'; ctx.fill(); ctx.lineWidth=R*.045; ctx.strokeStyle='#FFE03D'; ctx.stroke();
+    ctx.beginPath(); ctx.ellipse(-R*.08,-R*.14,R*.07,R*.15,0,0,Math.PI*2); ctx.fillStyle='rgba(255,255,255,.4)'; ctx.fill();
+    ctx.restore();
+  }
+  // 花心：笑臉
+  ctx.beginPath(); ctx.arc(0,0,R*.36,0,Math.PI*2); ctx.fillStyle='#FFD21F'; ctx.fill(); ctx.lineWidth=R*.045; ctx.strokeStyle='#FFE03D'; ctx.stroke();
+  ctx.rotate(Math.sin(t*1.6)*.12);
+  ctx.fillStyle='#2A1830';
+  ctx.beginPath(); ctx.ellipse(-R*.12,-R*.05,R*.04,R*.06,0,0,Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(R*.12,-R*.05,R*.04,R*.06,0,0,Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(0,R*.04,R*.11,.15*Math.PI,.85*Math.PI); ctx.lineWidth=R*.035; ctx.lineCap='round'; ctx.strokeStyle='#2A1830'; ctx.stroke();
+  ctx.fillStyle='rgba(255,62,142,.6)';
+  ctx.beginPath(); ctx.ellipse(-R*.22,R*.07,R*.06,R*.035,0,0,Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(R*.22,R*.07,R*.06,R*.035,0,0,Math.PI*2); ctx.fill();
+  ctx.restore();
+}
+function sparkle(ctx,x,y,s){ ctx.beginPath(); for(let k=0;k<8;k++){ const a=k/8*Math.PI*2, rr2=k%2?s*.35:s; ctx.lineTo(x+Math.cos(a)*rr2,y+Math.sin(a)*rr2);} ctx.closePath(); ctx.fill(); }
+function drawFlowerCell(ctx,r,t){   // 只有花，沒有框和底色
+  drawFlower(ctx,r.x+r.w/2,r.y+r.h/2,r.w*.45,t);
+}
+// 網頁上的花：用同一個畫法，一直轉
+let boardFlowerCv=null;
+function startBoardFlower(cv){ boardFlowerCv=cv; if(startBoardFlower.on) return; startBoardFlower.on=true;
+  const t0=performance.now();
+  const loop=now=>{ const c=boardFlowerCv; if(c&&c.isConnected){ const w=c.clientWidth, d=window.devicePixelRatio||1;
+      if(w){ if(c.width!==Math.round(w*d)){ c.width=c.height=Math.round(w*d); } const x=c.getContext('2d'); x.setTransform(d,0,0,d,0,0); x.clearRect(0,0,w,w);
+        const t=(now-t0)/1000;
+        drawFlower(x,w/2,w/2,w*.45,t); } }
+    requestAnimationFrame(loop); };
+  requestAnimationFrame(loop); }
 function drawCellT(ctx,i,r,rot,o){
   const cx=r.x+r.w/2, cy=r.y+r.h/2;
   ctx.save(); ctx.translate(cx,cy); ctx.rotate(rot);
@@ -785,7 +828,7 @@ function drawPanelTitle(ctx,a,outro,lt){
     popText(ctx,'挑戰完成！',X,110,84,C.pink);
     strip(ctx,'クリア！',X+4,226,34);
     const n=filledCount();
-    ctx.fillStyle=C.ink; ctx.font=`900 50px ${FZ}`; ctx.fillText(`完成 ${n} / 9 格`,X,312);
+    ctx.fillStyle=C.ink; ctx.font=`900 50px ${FZ}`; ctx.fillText(`完成 ${n} / ${TOTAL} 格`,X,312);
     ctx.fillStyle=C.muted; ctx.font=`700 24px ${FZ}`; ctx.fillText(EVENT.zh,X,388);
     ctx.font=`800 22px ${FJ}`; ctx.fillText('Our 9 Moments',X,424);
     bubble(ctx,EVENT.bubble,X,560,(lt-.6)/.4);
@@ -799,8 +842,8 @@ function drawPanelFocus(ctx,i,a){
   const q=QUESTIONS[i], X=726, MW=508; ctx.save(); ctx.globalAlpha=a; ctx.textAlign='left'; ctx.textBaseline='middle';
   const col=q.type==='video'?C.pink:C.sky;
   ctx.fillStyle=col; ctx.beginPath(); ctx.arc(X+28,92,28,0,Math.PI*2); ctx.fill(); ctx.lineWidth=3; ctx.strokeStyle=C.ink; ctx.stroke();
-  ctx.fillStyle='#fff'; ctx.textAlign='center'; ctx.font=`400 26px ${FP}`; ctx.fillText(String(i+1),X+28,93);
-  ctx.textAlign='left'; ctx.fillStyle=C.muted; ctx.font=`400 22px ${FP}`; ctx.fillText('/ 9',X+66,94);
+  ctx.fillStyle='#fff'; ctx.textAlign='center'; ctx.font=`400 26px ${FP}`; ctx.fillText(String(qNo(i)),X+28,93);
+  ctx.textAlign='left'; ctx.fillStyle=C.muted; ctx.font=`400 22px ${FP}`; ctx.fillText('/ '+TOTAL,X+66,94);
   const tag=q.type==='photo'?'拍照 写真':'錄影 動画'; ctx.font=`400 19px ${FC}`; const tw=ctx.measureText(tag).width+28;
   ctx.save(); ctx.translate(X+124,76); ctx.rotate(.04); ctx.fillStyle=q.type==='photo'?C.night:C.pink; rr(ctx,0,0,tw,34,6); ctx.fill();
   ctx.lineWidth=2; ctx.strokeStyle=q.type==='photo'?C.lemon:C.ink; ctx.stroke();
@@ -814,7 +857,7 @@ function drawPanelFocus(ctx,i,a){
     if(y+(dz.length+dj.length)*ds*1.5+(dj.length?ds*.6:0)<=628) break; }
   ctx.fillStyle=C.muted; ctx.font=`500 ${ds}px ${FZ}`; dz.forEach(l=>{ctx.fillText(l,X,y);y+=ds*1.5;});
   if(dj.length){ y+=ds*.6; ctx.fillStyle='#E9D9F2'; ctx.font=`500 ${ds}px ${FJ}`; dj.forEach(l=>{ if(y<640){ ctx.fillText(l,X,y);} y+=ds*1.5;}); }
-  for(let k=0;k<9;k++){ctx.beginPath(); ctx.arc(X+12+k*34,652,k===i?10:7,0,Math.PI*2); ctx.fillStyle=k===i?C.pink:(filled(cells[k])?C.ink:C.dim); ctx.fill();}
+  let dn=0; for(let k=0;k<9;k++){ if(QUESTIONS[k].type==='flower') continue; ctx.beginPath(); ctx.arc(X+12+dn*34,652,k===i?10:7,0,Math.PI*2); ctx.fillStyle=k===i?C.pink:(filled(cells[k])?C.ink:C.dim); ctx.fill(); dn++; }
   ctx.restore();
 }
 
@@ -828,6 +871,7 @@ function drawConfetti(ctx,tc){
 }
 
 function drawFrame(ctx,segs,t){
+  FLOWER_T=t;
   ctx.fillStyle=C.bg; ctx.fillRect(0,0,W,H);
   ctx.fillStyle=C.card; rr(ctx,G.x-20,G.y-20,G.s+40,G.s+40,28); ctx.fill();
   ctx.fillStyle=dots(ctx); rr(ctx,G.x-20,G.y-20,G.s+40,G.s+40,28); ctx.fill();
@@ -1144,8 +1188,8 @@ function pickMime(){
   return '';
 }
 async function loadFonts(){
-  const zh=QUESTIONS.map(q=>q.zh+q.desc).join('')+EVENT.zh+EVENT.top+'拍照錄影，完成九格！挑戰完成格台日交流0123456789/';
-  const ja=QUESTIONS.map(q=>q.ja+(q.jdesc||'')).join('')+'枚目'+'写真と動画で、9マスをコンプリート！'+EVENT.top+'KEELUNGTAIWANTSUCHIURAJAPAN✦';
+  const zh=QUESTIONS.map(q=>(q.zh||'')+(q.desc||'')).join('')+EVENT.zh+EVENT.top+'拍照錄影，完成九格！挑戰完成格台日交流0123456789/';
+  const ja=QUESTIONS.map(q=>(q.ja||'')+(q.jdesc||'')).join('')+'枚目'+'写真と動画で、9マスをコンプリート！'+EVENT.top+'KEELUNGTAIWANTSUCHIURAJAPAN✦';
   const pop='Our9MomentsVOL.0123456789/SPECIAL'+EVENT.date, cute=EVENT.ja+EVENT.bubble+'クリア!！♡台日交流拍照写真錄影動画';
   if(!document.fonts||!document.fonts.load) return;
   await Promise.race([Promise.all([
